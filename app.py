@@ -178,6 +178,7 @@ if submitted:
         from langchain.agents import create_agent
         from langchain.messages import HumanMessage
         from models import openai_model
+        from tavily import UsageLimitExceededError
 
         updated_system_prompt = WEDDING_PLANNER_AGENT_PROMPT.format(
             requirements=requirements
@@ -192,9 +193,19 @@ if submitted:
 
         logging.info("Generating a wedding plan")
         with st.spinner("Putting together your NYC wedding plan..."):
-            response = wedding_planner.invoke(
-                {"messages": [HumanMessage(content=USER_PROMPT_FOR_MAIN_AGENT)]}
-            )
+            try:
+                response = wedding_planner.invoke(
+                    {"messages": [HumanMessage(content=USER_PROMPT_FOR_MAIN_AGENT)]}
+                )
+            except UsageLimitExceededError as error:
+                logging.exception("Tavily search usage limit was exceeded")
+                st.error(
+                    "The web-search service has reached its usage limit, so the "
+                    "planner couldn't complete the research. Check your Tavily "
+                    "account's usage and billing limits, then try again. "
+                    f"Details: {error}"
+                )
+                st.stop()
 
         st.subheader("Your wedding plan")
         st.write(response["messages"][-1].content)
