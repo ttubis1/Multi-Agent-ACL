@@ -1,0 +1,200 @@
+import logging
+
+import streamlit as st
+
+from prompts import USER_PROMPT_FOR_MAIN_AGENT, WEDDING_PLANNER_AGENT_PROMPT
+
+
+def format_choices(choices: list[str], additional_choice: str = "") -> str:
+    selected = [choice for choice in choices if choice]
+    if additional_choice.strip():
+        selected.append(additional_choice.strip())
+    return ", ".join(selected) if selected else "No specific preference provided."
+
+
+st.set_page_config(page_title="NYC wedding planner", page_icon=":material/favorite:")
+st.title("NYC wedding planner")
+st.write(
+    "Share your preferences and we'll create a venue-focused wedding plan "
+    "for New York City."
+)
+
+date_preference = st.selectbox(
+    "How flexible are your dates?",
+    ["Flexible dates", "Month or season", "Date range", "Exact date"],
+)
+
+with st.form("wedding_requirements"):
+    st.subheader("Date and budget")
+    if date_preference == "Month or season":
+        preferred_period = st.text_input(
+            "Preferred month or season",
+            placeholder="For example, October or spring 2027",
+        )
+        date_details = preferred_period.strip() or "Not specified"
+    elif date_preference == "Date range":
+        range_start = st.date_input("Earliest preferred date", value=None)
+        range_end = st.date_input("Latest preferred date", value=None)
+        date_details = (
+            f"{range_start or 'No start date'} to {range_end or 'no end date'}"
+        )
+    elif date_preference == "Exact date":
+        exact_date = st.date_input("Preferred wedding date", value=None)
+        date_details = str(exact_date) if exact_date else "Not specified"
+    else:
+        flexibility_notes = st.text_input(
+            "Timing notes (optional)",
+            placeholder="For example, avoid holiday weekends",
+        )
+        date_details = flexibility_notes.strip() or "Open to dates"
+
+    budget_range = st.text_input(
+        "Rough budget range (USD)",
+        placeholder="For example, $50,000–$80,000",
+        help="Include venue, catering, taxes, and fees.",
+    )
+
+    st.subheader("Location and style")
+    preferred_areas = st.multiselect(
+        "Preferred NYC neighborhoods or areas",
+        [
+            "Manhattan",
+            "Brooklyn",
+            "Queens",
+            "The Bronx",
+            "Staten Island",
+            "Near Central Park",
+            "Waterfront",
+        ],
+    )
+    other_area = st.text_input(
+        "Other preferred areas (optional)",
+        placeholder="Add neighborhoods or nearby areas",
+    )
+    style = st.text_area(
+        "Style or vibe",
+        placeholder="For example, an elegant ballroom, modern loft, classic hotel, "
+        "or a venue with indoor and outdoor spaces",
+    )
+
+    st.subheader("Venue requirements")
+    must_haves = st.multiselect(
+        "On-site must-haves",
+        [
+            "Dance floor",
+            "Stage for live music",
+            "Audio/visual equipment",
+            "Bridal suite",
+            "Wheelchair accessibility",
+            "Loading dock",
+            "Parking or valet",
+        ],
+    )
+    other_must_haves = st.text_input(
+        "Other venue requirements (optional)",
+        placeholder="Add any other must-haves",
+    )
+    dietary_needs = st.multiselect(
+        "Dietary considerations beyond standard options",
+        [
+            "Vegetarian",
+            "Vegan",
+            "Gluten-free",
+            "Dairy-free",
+            "Kosher",
+            "Halal",
+            "Allergy-aware service",
+        ],
+    )
+    other_dietary_needs = st.text_input(
+        "Other dietary needs (optional)",
+        placeholder="Describe any other restrictions",
+    )
+
+    st.subheader("Entertainment and beverages")
+    entertainment = st.selectbox(
+        "Entertainment preference",
+        ["DJ", "Live band", "Either; recommend the best fit", "Other"],
+    )
+    entertainment_details = st.text_input(
+        "Entertainment or equipment needs (optional)",
+        placeholder="For example, microphones, speakers, or a lighting setup",
+    )
+    beverage_policy = st.selectbox(
+        "Beverage policy",
+        [
+            "Strictly dry venue",
+            "Beer and wine only under the venue's license",
+            "Open to other licensed beverage options",
+            "Consider BYO, subject to venue restrictions",
+            "No preference; recommend suitable options",
+        ],
+    )
+    beverage_details = st.text_input(
+        "Beverage or BYO restrictions (optional)",
+        placeholder="Add any licensing or service details",
+    )
+
+    submitted = st.form_submit_button(
+        "Plan my wedding",
+        type="primary",
+        width="stretch",
+    )
+
+if submitted:
+    if (
+        date_preference == "Date range"
+        and range_start is not None
+        and range_end is not None
+        and range_start > range_end
+    ):
+        st.error("The earliest preferred date must be on or before the latest date.")
+    else:
+        requirements = "\n".join(
+            [
+                f"Date preference: {date_preference} ({date_details})",
+                "Budget (venue, catering, taxes, and fees): "
+                f"{budget_range.strip() or 'Not specified'}",
+                "Preferred NYC areas: "
+                f"{format_choices(preferred_areas, other_area)}",
+                f"Style or vibe: {style.strip() or 'Not specified'}",
+                "On-site must-haves: "
+                f"{format_choices(must_haves, other_must_haves)}",
+                "Dietary considerations: "
+                f"{format_choices(dietary_needs, other_dietary_needs)}",
+                "Entertainment preference: "
+                f"{entertainment}"
+                f"{': ' + entertainment_details.strip() if entertainment_details.strip() else ''}",
+                "Beverage policy: "
+                f"{beverage_policy}"
+                f"{': ' + beverage_details.strip() if beverage_details.strip() else ''}",
+            ]
+        )
+
+        with st.expander("Review your requirements"):
+            st.text(requirements)
+
+        from agents import delegate_to_sub_agent1, delegate_to_sub_agent2
+        from langchain.agents import create_agent
+        from langchain.messages import HumanMessage
+        from models import openai_model
+
+        updated_system_prompt = WEDDING_PLANNER_AGENT_PROMPT.format(
+            requirements=requirements
+        )
+        logging.info("Creating the wedding planner agent")
+        wedding_planner = create_agent(
+            model=openai_model,
+            tools=[delegate_to_sub_agent1, delegate_to_sub_agent2],
+            name="main-agent",
+            system_prompt=updated_system_prompt,
+        )
+
+        logging.info("Generating a wedding plan")
+        with st.spinner("Putting together your NYC wedding plan..."):
+            response = wedding_planner.invoke(
+                {"messages": [HumanMessage(content=USER_PROMPT_FOR_MAIN_AGENT)]}
+            )
+
+        st.subheader("Your wedding plan")
+        st.write(response["messages"][-1].content)
