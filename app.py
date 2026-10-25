@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 import streamlit as st
 
@@ -23,6 +24,9 @@ date_preference = st.selectbox(
     "How flexible are your dates?",
     ["Flexible dates", "Month or season", "Date range", "Exact date"],
 )
+
+range_start: date | None = None
+range_end: date | None = None
 
 with st.form("wedding_requirements"):
     st.subheader("Date and budget")
