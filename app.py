@@ -13,6 +13,32 @@ def format_choices(choices: list[str], additional_choice: str = "") -> str:
     return ", ".join(selected) if selected else "No specific preference provided."
 
 
+def start_new_plan() -> None:
+    for key in (
+        "date_preference",
+        "preferred_period",
+        "range_start",
+        "range_end",
+        "exact_date",
+        "flexibility_notes",
+        "budget_range",
+        "preferred_areas",
+        "other_area",
+        "style",
+        "must_haves",
+        "other_must_haves",
+        "dietary_needs",
+        "other_dietary_needs",
+        "entertainment",
+        "entertainment_details",
+        "beverage_policy",
+        "beverage_details",
+        "wedding_requirements_text",
+        "wedding_plan",
+    ):
+        st.session_state.pop(key, None)
+
+
 st.set_page_config(page_title="NYC wedding planner", page_icon=":material/favorite:")
 st.title("NYC wedding planner")
 st.write(
@@ -23,6 +49,7 @@ st.write(
 date_preference = st.selectbox(
     "How flexible are your dates?",
     ["Flexible dates", "Month or season", "Date range", "Exact date"],
+    key="date_preference",
 )
 
 range_start: date | None = None
@@ -34,21 +61,35 @@ with st.form("wedding_requirements"):
         preferred_period = st.text_input(
             "Preferred month or season",
             placeholder="For example, October or spring 2027",
+            key="preferred_period",
         )
         date_details = preferred_period.strip() or "Not specified"
     elif date_preference == "Date range":
-        range_start = st.date_input("Earliest preferred date", value=None)
-        range_end = st.date_input("Latest preferred date", value=None)
+        range_start = st.date_input(
+            "Earliest preferred date",
+            value=None,
+            key="range_start",
+        )
+        range_end = st.date_input(
+            "Latest preferred date",
+            value=None,
+            key="range_end",
+        )
         date_details = (
             f"{range_start or 'No start date'} to {range_end or 'no end date'}"
         )
     elif date_preference == "Exact date":
-        exact_date = st.date_input("Preferred wedding date", value=None)
+        exact_date = st.date_input(
+            "Preferred wedding date",
+            value=None,
+            key="exact_date",
+        )
         date_details = str(exact_date) if exact_date else "Not specified"
     else:
         flexibility_notes = st.text_input(
             "Timing notes (optional)",
             placeholder="For example, avoid holiday weekends",
+            key="flexibility_notes",
         )
         date_details = flexibility_notes.strip() or "Open to dates"
 
@@ -56,6 +97,7 @@ with st.form("wedding_requirements"):
         "Rough budget range (USD)",
         placeholder="For example, $50,000–$80,000",
         help="Include venue, catering, taxes, and fees.",
+        key="budget_range",
     )
 
     st.subheader("Location and style")
@@ -70,15 +112,18 @@ with st.form("wedding_requirements"):
             "Near Central Park",
             "Waterfront",
         ],
+        key="preferred_areas",
     )
     other_area = st.text_input(
         "Other preferred areas (optional)",
         placeholder="Add neighborhoods or nearby areas",
+        key="other_area",
     )
     style = st.text_area(
         "Style or vibe",
         placeholder="For example, an elegant ballroom, modern loft, classic hotel, "
         "or a venue with indoor and outdoor spaces",
+        key="style",
     )
 
     st.subheader("Venue requirements")
@@ -93,10 +138,12 @@ with st.form("wedding_requirements"):
             "Loading dock",
             "Parking or valet",
         ],
+        key="must_haves",
     )
     other_must_haves = st.text_input(
         "Other venue requirements (optional)",
         placeholder="Add any other must-haves",
+        key="other_must_haves",
     )
     dietary_needs = st.multiselect(
         "Dietary considerations beyond standard options",
@@ -109,20 +156,24 @@ with st.form("wedding_requirements"):
             "Halal",
             "Allergy-aware service",
         ],
+        key="dietary_needs",
     )
     other_dietary_needs = st.text_input(
         "Other dietary needs (optional)",
         placeholder="Describe any other restrictions",
+        key="other_dietary_needs",
     )
 
     st.subheader("Entertainment and beverages")
     entertainment = st.selectbox(
         "Entertainment preference",
         ["DJ", "Live band", "Either; recommend the best fit", "Other"],
+        key="entertainment",
     )
     entertainment_details = st.text_input(
         "Entertainment or equipment needs (optional)",
         placeholder="For example, microphones, speakers, or a lighting setup",
+        key="entertainment_details",
     )
     beverage_policy = st.selectbox(
         "Beverage policy",
@@ -133,10 +184,12 @@ with st.form("wedding_requirements"):
             "Consider BYO, subject to venue restrictions",
             "No preference; recommend suitable options",
         ],
+        key="beverage_policy",
     )
     beverage_details = st.text_input(
         "Beverage or BYO restrictions (optional)",
         placeholder="Add any licensing or service details",
+        key="beverage_details",
     )
 
     submitted = st.form_submit_button(
@@ -175,9 +228,6 @@ if submitted:
             ]
         )
 
-        with st.expander("Review your requirements"):
-            st.text(requirements)
-
         from agents import delegate_to_sub_agent1, delegate_to_sub_agent2
         from langchain.agents import create_agent
         from langchain.messages import HumanMessage
@@ -211,5 +261,18 @@ if submitted:
                 )
                 st.stop()
 
-        st.subheader("Your wedding plan")
-        st.write(response["messages"][-1].content)
+        st.session_state["wedding_requirements_text"] = requirements
+        st.session_state["wedding_plan"] = response["messages"][-1].content
+
+if st.session_state.get("wedding_plan"):
+    st.button(
+        "New plan",
+        on_click=start_new_plan,
+        icon=":material/add:",
+    )
+
+    with st.expander("Review your requirements"):
+        st.text(st.session_state["wedding_requirements_text"])
+
+    st.subheader("Your wedding plan")
+    st.write(st.session_state["wedding_plan"])
