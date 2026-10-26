@@ -14,7 +14,8 @@ def format_choices(choices: list[str], additional_choice: str = "") -> str:
 
 
 def start_new_plan() -> None:
-    for key in (
+    version = st.session_state.get("requirements_version", 0)
+    for field in (
         "date_preference",
         "preferred_period",
         "range_start",
@@ -33,25 +34,38 @@ def start_new_plan() -> None:
         "entertainment_details",
         "beverage_policy",
         "beverage_details",
+    ):
+        st.session_state.pop(f"{field}_{version}", None)
+    for key in (
         "wedding_requirements_text",
         "wedding_summary",
         "wedding_plan",
     ):
         st.session_state.pop(key, None)
+    st.session_state["requirements_version"] = version + 1
+
+
+def field_key(name: str) -> str:
+    return f"{name}_{st.session_state.get('requirements_version', 0)}"
 
 
 def current_date_summary() -> str:
-    preference = st.session_state.get("date_preference", "Flexible dates")
+    preference = st.session_state.get(
+        field_key("date_preference"),
+        "Flexible dates",
+    )
     if preference == "Date range":
-        start = st.session_state.get("range_start")
-        end = st.session_state.get("range_end")
+        start = st.session_state.get(field_key("range_start"))
+        end = st.session_state.get(field_key("range_end"))
         if start or end:
             return f"{start or 'Any date'} – {end or 'Any date'}"
         return "Date range not set"
     if preference == "Exact date":
-        return str(st.session_state.get("exact_date") or "Exact date not set")
+        return str(
+            st.session_state.get(field_key("exact_date")) or "Exact date not set"
+        )
     if preference == "Month or season":
-        return st.session_state.get("preferred_period") or "Month or season"
+        return st.session_state.get(field_key("preferred_period")) or "Month or season"
     return "Flexible dates"
 
 
@@ -74,8 +88,8 @@ if st.session_state.get("wedding_plan"):
     )
 
 date_summary = current_date_summary()
-budget_summary = st.session_state.get("budget_range", "").strip() or "Not set"
-areas = st.session_state.get("preferred_areas", [])
+budget_summary = st.session_state.get(field_key("budget_range"), "").strip() or "Not set"
+areas = st.session_state.get(field_key("preferred_areas"), [])
 area_summary = ", ".join(areas) if areas else "New York City"
 
 with st.container(horizontal=True):
@@ -113,18 +127,21 @@ with form_column:
         date_preference = st.selectbox(
             "Date flexibility",
             ["Flexible dates", "Month or season", "Date range", "Exact date"],
-            key="date_preference",
+            key=field_key("date_preference"),
         )
 
         range_start: date | None = None
         range_end: date | None = None
 
-        with st.form("wedding_requirements", border=False):
+        with st.form(
+            f"wedding_requirements_{st.session_state.get('requirements_version', 0)}",
+            border=False,
+        ):
             if date_preference == "Month or season":
                 preferred_period = st.text_input(
                     "Preferred month or season",
                     placeholder="For example, October or spring 2027",
-                    key="preferred_period",
+                    key=field_key("preferred_period"),
                 )
                 date_details = preferred_period.strip() or "Not specified"
             elif date_preference == "Date range":
@@ -132,12 +149,12 @@ with form_column:
                 range_start = date_columns[0].date_input(
                     "Earliest preferred date",
                     value=None,
-                    key="range_start",
+                    key=field_key("range_start"),
                 )
                 range_end = date_columns[1].date_input(
                     "Latest preferred date",
                     value=None,
-                    key="range_end",
+                    key=field_key("range_end"),
                 )
                 date_details = (
                     f"{range_start or 'No start date'} to "
@@ -147,14 +164,14 @@ with form_column:
                 exact_date = st.date_input(
                     "Preferred wedding date",
                     value=None,
-                    key="exact_date",
+                    key=field_key("exact_date"),
                 )
                 date_details = str(exact_date) if exact_date else "Not specified"
             else:
                 flexibility_notes = st.text_input(
                     "Timing notes (optional)",
                     placeholder="For example, avoid holiday weekends",
-                    key="flexibility_notes",
+                    key=field_key("flexibility_notes"),
                 )
                 date_details = flexibility_notes.strip() or "Open to dates"
 
@@ -163,7 +180,7 @@ with form_column:
                 "Rough budget range (USD)",
                 placeholder="For example, $50,000–$80,000",
                 help="Include venue, catering, taxes, and fees.",
-                key="budget_range",
+                key=field_key("budget_range"),
             )
             preferred_areas = st.multiselect(
                 "Preferred NYC neighborhoods or areas",
@@ -176,12 +193,12 @@ with form_column:
                     "Near Central Park",
                     "Waterfront",
                 ],
-                key="preferred_areas",
+                key=field_key("preferred_areas"),
             )
             other_area = st.text_input(
                 "Other preferred areas (optional)",
                 placeholder="Add neighborhoods or nearby areas",
-                key="other_area",
+                key=field_key("other_area"),
             )
             style = st.text_area(
                 "Style or vibe",
@@ -189,7 +206,7 @@ with form_column:
                     "For example, an elegant ballroom, modern loft, classic hotel, "
                     "or a venue with indoor and outdoor spaces"
                 ),
-                key="style",
+                key=field_key("style"),
             )
 
             st.caption("PRIORITIES AND GUARDRAILS")
@@ -204,12 +221,12 @@ with form_column:
                     "Loading dock",
                     "Parking or valet",
                 ],
-                key="must_haves",
+                key=field_key("must_haves"),
             )
             other_must_haves = st.text_input(
                 "Other venue requirements (optional)",
                 placeholder="Add any other must-haves",
-                key="other_must_haves",
+                key=field_key("other_must_haves"),
             )
             dietary_needs = st.multiselect(
                 "Dietary considerations beyond standard options",
@@ -222,12 +239,12 @@ with form_column:
                     "Halal",
                     "Allergy-aware service",
                 ],
-                key="dietary_needs",
+                key=field_key("dietary_needs"),
             )
             other_dietary_needs = st.text_input(
                 "Other dietary needs (optional)",
                 placeholder="Describe any other restrictions",
-                key="other_dietary_needs",
+                key=field_key("other_dietary_needs"),
             )
 
             st.caption("ENTERTAINMENT AND BEVERAGES")
@@ -235,7 +252,7 @@ with form_column:
             entertainment = preference_columns[0].selectbox(
                 "Entertainment preference",
                 ["DJ", "Live band", "Either; recommend the best fit", "Other"],
-                key="entertainment",
+                key=field_key("entertainment"),
             )
             beverage_policy = preference_columns[1].selectbox(
                 "Beverage policy",
@@ -246,17 +263,17 @@ with form_column:
                     "Consider BYO, subject to venue restrictions",
                     "No preference; recommend suitable options",
                 ],
-                key="beverage_policy",
+                key=field_key("beverage_policy"),
             )
             entertainment_details = st.text_input(
                 "Entertainment or equipment needs (optional)",
                 placeholder="For example, microphones, speakers, or lighting",
-                key="entertainment_details",
+                key=field_key("entertainment_details"),
             )
             beverage_details = st.text_input(
                 "Beverage or BYO restrictions (optional)",
                 placeholder="Add any licensing or service details",
-                key="beverage_details",
+                key=field_key("beverage_details"),
             )
 
             submitted = st.form_submit_button(
